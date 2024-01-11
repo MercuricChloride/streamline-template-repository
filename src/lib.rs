@@ -21,6 +21,8 @@ use substreams_alloy_helpers::{
     filter, format_inputs, loose_sol, map, map_access, map_literal, prelude::*, sol_type, to_array,
     with_map,
 };
+
+use substreams_alloy_helpers::store_helpers::GenericStore;
 use substreams_ethereum::pb::eth::rpc::{RpcCall, RpcCalls};
 
 include!("./streamline.rs");
