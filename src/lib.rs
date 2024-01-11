@@ -18,8 +18,8 @@ use serde::{Deserialize, Serialize, Serializer};
 
 use substreams_alloy_helpers::prelude::*;
 use substreams_alloy_helpers::{
-    filter, format_inputs, loose_sol, map, map_access, map_literal, prelude::*, sol_type, to_array,
-    with_map,
+    filter, format_inputs, loose_sol, map, map_access, map_insert, map_literal, prelude::*,
+    sol_type, to_array, with_map,
 };
 
 use substreams_alloy_helpers::store_helpers::GenericStore;
