@@ -22,7 +22,7 @@ use substreams_alloy_helpers::{
     with_map,
 };
 
-use substreams_alloy_helpers::store_helpers::GenericStore;
+use substreams_alloy_helpers::store_helpers::{GenericStore, GenericStoreGet};
 use substreams_ethereum::pb::eth::rpc::{RpcCall, RpcCalls};
 
 include!("./streamline.rs");
