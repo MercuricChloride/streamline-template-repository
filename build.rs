@@ -16,7 +16,6 @@ impl AbiEventHelpers for Value {
         pub fn {event_name}(block: &mut EthBlock, addresses: Array) -> Dynamic {{
             let events = get_events::<{abi_module_name}::events::{event_name}>(block);
             let events = events.into_iter().map(Dynamic::from).collect::<Vec<_>>();
-            substreams::log::println(format!("{{:?}}", events));
             Dynamic::from(events)
         }}
         "#)
@@ -46,7 +45,6 @@ impl AbiHelpers for Vec<Value> {
             .join("\n");
 
         format!(r#"
-
 #[export_module]
 mod {contract_name} {{
     use super::EthBlock;
@@ -54,7 +52,7 @@ mod {contract_name} {{
     use rhai::plugin::*;
     use substreams_ethereum::Event;
     use crate::abi::{contract_name} as {abi_module_name};
-    use crate::get_events;
+    use crate::builtins::get_events;
     {event_registers}
 }}
         "#)
@@ -75,7 +73,7 @@ const REPLACEMENT_DERIVES: &'static str = "#[derive(Debug, Clone, PartialEq, Cus
 
 // Imports
 const DEFAULT_IMPORTS: &'static str = "use super::INTERNAL_ERR;";
-const REPLACEMENT_IMPORTS: &'static str = "use super::INTERNAL_ERR; use rhai::{{TypeBuilder, CustomType}}; use serde::{{Serialize}}; use crate::SerdeWrapper;";
+const REPLACEMENT_IMPORTS: &'static str = "use super::INTERNAL_ERR; use rhai::{{TypeBuilder, CustomType}};";
 
 fn replace_derives(path: &str) {
     let mut file = fs::read_to_string(path).unwrap();
@@ -101,7 +99,7 @@ pub fn main() -> Result<(), anyhow::Error> {
         let abi_path_str = abi_path.to_str().unwrap();
         let abi_file_name = abi_path.file_name().unwrap().to_str().unwrap();
 
-        let abi_contents = fs::read_to_string(&abi_path)?;
+        let abi_contents = fs::read_to_string(&abi_path_str)?;
 
         let abi_name = abi_file_name.split('/').last().unwrap().trim_end_matches(".json");
         let decoded: Vec<Value>  = serde_json::from_str(&abi_contents)?;
