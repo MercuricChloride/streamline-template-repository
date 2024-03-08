@@ -88,7 +88,7 @@ fn replace_imports(path: &str) {
 }
 
 pub fn main() -> Result<(), anyhow::Error> {
-    let abis = fs::read_dir("abi").unwrap();
+    let abis = fs::read_dir("abis").unwrap();
 
     let mut module_formatters = String::new();
     let mut imports = String::new();
@@ -105,7 +105,7 @@ pub fn main() -> Result<(), anyhow::Error> {
         let decoded: Vec<Value>  = serde_json::from_str(&abi_contents)?;
 
         // Write the rust bindings
-        let target_path = format!("./src/abi/{}.rs",abi_name);
+        let target_path = format!("./src/abis/{}.rs",abi_name);
         Abigen::new(abi_name, abi_path_str)?
             .generate()?
             .write_to_file(&target_path)?;
@@ -150,7 +150,7 @@ macro_rules! engine_init {{
 
      fs::write("./src/generated/imports.rs", imports).unwrap();
      fs::write("./src/generated/engine_init.rs", engine_init_macro).unwrap();
-     fs::write("./src/abi/mod.rs", mod_file).unwrap();
+     fs::write("./src/abis/mod.rs", mod_file).unwrap();
 
     Ok(())
 }

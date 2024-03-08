@@ -25,4 +25,6 @@ use substreams_alloy_helpers::{
 use substreams_alloy_helpers::store_helpers::{GenericStore, GenericStoreGet};
 use substreams_ethereum::pb::eth::rpc::{RpcCall, RpcCalls};
 
+const RHAI_SCRIPT: &str = include_string!("../streamline.rhai");
+
 include!("./streamline.rs");
