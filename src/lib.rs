@@ -1,10 +1,5 @@
 use std::collections::HashMap;
 
-use alloy_primitives::aliases::{B16, B32, B8, U1};
-use alloy_primitives::{address, hex_literal, Address, Bytes, FixedBytes, Log};
-use alloy_sol_types::abi::{Decoder, TokenSeq};
-use alloy_sol_types::sol_data::Bool;
-use alloy_sol_types::{SolCall, SolEnum, SolEvent, SolInterface, TopicList};
 use prost_wkt_types::{ListValue, Struct};
 use serde_json::{value::Index, Map, Value};
 use substreams::prelude::*;
@@ -16,15 +11,6 @@ use substreams_ethereum::Event;
 
 use serde::{Deserialize, Serialize, Serializer};
 
-use substreams_alloy_helpers::prelude::*;
-use substreams_alloy_helpers::{
-    filter, format_inputs, loose_sol, map, map_access, map_literal, prelude::*, sol_type, to_array,
-    with_map,
-};
-
-use substreams_alloy_helpers::store_helpers::{GenericStore, GenericStoreGet};
-use substreams_ethereum::pb::eth::rpc::{RpcCall, RpcCalls};
-
-const RHAI_SCRIPT: &str = include_string!("../streamline.rhai");
+const RHAI_SCRIPT: &str = include_str!("../streamline.rhai");
 
 include!("./streamline.rs");
