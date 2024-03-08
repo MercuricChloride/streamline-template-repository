@@ -7,11 +7,7 @@ edition = "2021"
 name = "streamline"
 crate-type = ["cdylib"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-#alloy-primitives = "0.5.4"
-#alloy-sol-types = "0.5.4"
 ethabi = "18.0.0"
 num-bigint = "0.4.4"
 phf = {version = "0.11.2", features = ["macros"]}
@@ -20,15 +16,14 @@ rhai = { git = "https://github.com/MercuricChloride/rhai", default-features = fa
 serde = { version = "1.0.195", features = ["derive"] }
 serde_json = "1.0.111"
 substreams = "0.5.12"
-#substreams-alloy-helpers = {git = "https://github.com/MercuricChloride/substreams-alloy-helpers"}
 substreams-database-change = "1.3.0"
 substreams-ethereum = "0.9.9"
 
 [profile.release]
-lto = "fat"         # turn on Link-Time Optimizations
-codegen-units = 1   # trade compile time with maximum optimization
-opt-level = "z"     # optimize for size
-strip = true        # strip symbols from the binary
+lto = "fat"
+codegen-units = 1
+opt-level = "z"
+strip = true
 
 [build-dependencies]
 serde_json = "1.0.111"
