@@ -17,7 +17,7 @@ use substreams::Hex;
 use ethabi::Event as EthEvent;
 
 pub fn get_events<T>(block: &mut EthBlock) -> Vec<Dynamic>
-where T: Sized + Event + Clone {
+where T: Sized + Event + Clone + Serialize {
     //let addresses = addresses.iter().map(|address| Hex(address)).collect::<Vec<_>>();
     let mut events = vec![];
 
@@ -25,10 +25,13 @@ where T: Sized + Event + Clone {
         let event = T::match_and_decode(log);
 
         if let Some(event) = event {
-            //let as_dyn = Dynamic::from(event.clone());
-            //if !as_dyn.is_unit() {
-                //events.push(as_dyn);
-            //}
+            let as_value = serde_json::to_value(event);
+            match as_value {
+                Ok(val) => events.push(serde_json::from_value(val).unwrap()),
+                Err(err) => {
+                    substreams::log::println(format!("GOT ERROR CONVERTING EVENT INTO DYNAMIC: {err:?}"))
+                }
+            }
         }
     }
 
@@ -113,22 +116,6 @@ impl TypeRegister for BigInt {
                     }
                 });
         }
-}
-
-struct MyBigInt {
-    pub big_int: BigInt,
-}
-
-impl From<MyBigInt> for BigInt {
-    fn from(value: MyBigInt) -> Self {
-        value.big_int
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-struct SerdeTest {
-    #[serde(with = "crate::builtins::serde_big_int")]
-    pub big_int: BigInt,
 }
 
 pub mod serde_big_int {
