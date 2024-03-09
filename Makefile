@@ -24,4 +24,4 @@ protogen:
 
 .PHONY: pack
 pack: build
-	substreams pack substreams.yaml
+	substreams pack streamline.yaml -o output.spkg

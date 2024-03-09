@@ -4,6 +4,8 @@ use serde_json::{self, Value};
 use serde::{de, Deserialize, Serialize};
 use substreams_ethereum::Abigen;
 
+use convert_case::{Case, Casing};
+
 trait AbiEventHelpers {
     fn event_getter(&self, abi_module_name: &str) -> String;
     fn type_builder(&self, abi_module_name: &str) -> String;
@@ -11,7 +13,7 @@ trait AbiEventHelpers {
 
 impl AbiEventHelpers for Value {
     fn event_getter(&self, abi_module_name: &str) -> String {
-        let event_name = self["name"].as_str().unwrap();
+        let event_name = self["name"].as_str().unwrap().to_case(Case::UpperCamel);
         format!(r#"
         pub fn {event_name}(block: &mut EthBlock, addresses: Array) -> Dynamic {{
             let events = get_events::<{abi_module_name}::events::{event_name}>(block);
@@ -25,8 +27,8 @@ impl AbiEventHelpers for Value {
         if self["type"] != "event" {
             return String::new();
         }
-        let event_name = self["name"].as_str().unwrap();
-        format!("engine.build_type::<abi::{abi_module_name}::events::{event_name}>();")
+        let event_name = self["name"].as_str().unwrap().to_case(Case::UpperCamel);
+        format!("engine.build_type::<abis::{abi_module_name}::events::{event_name}>();")
     }
 }
 
@@ -51,7 +53,7 @@ mod {contract_name} {{
     use rhai::{{Array, Dynamic}};
     use rhai::plugin::*;
     use substreams_ethereum::Event;
-    use crate::abi::{contract_name} as {abi_module_name};
+    use crate::abis::{contract_name} as {abi_module_name};
     use crate::builtins::get_events;
     {event_registers}
 }}
@@ -140,8 +142,9 @@ pub fn main() -> Result<(), anyhow::Error> {
     let engine_init_macro = format!(r#"
 macro_rules! engine_init {{
     () => {{{{
-        let mut engine = Engine::new();
+        let mut engine = Engine::new_raw();
         let mut scope = Scope::new();
+        let (mut engine, mut scope) = ::rhai::packages::streamline::init_package(engine, scope);
         {module_formatters}
         (engine, scope)
     }}}};

@@ -12,7 +12,7 @@ ethabi = "18.0.0"
 num-bigint = "0.4.4"
 phf = {version = "0.11.2", features = ["macros"]}
 prost-wkt-types = "0.4.2"
-rhai = { git = "https://github.com/MercuricChloride/rhai", default-features = false, features = ["std", "no_time", "serde", "substreams_runtime"] }
+rhai = { git = "https://github.com/MercuricChloride/rhai", branch = "streamline", default-features = false, features = ["std", "no_time", "serde", "substreams_runtime"] }
 serde = { version = "1.0.195", features = ["derive"] }
 serde_json = "1.0.111"
 substreams = "0.5.12"
@@ -30,3 +30,4 @@ serde_json = "1.0.111"
 serde = { version = "1.0.195", features = ["derive"] }
 anyhow = "1.0.80"
 substreams-ethereum = "0.9.9"
+convert_case = "0.6.0"
