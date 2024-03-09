@@ -114,13 +114,24 @@ fn add_bigint_serde(path: &str) {
         // we want to replace field declarations of BigInts, with the appropriate derives
         if is_field_def(line)
             && line.contains("substreams::scalar::BigInt,") {
-                new_lines.push("#[serde(with = \"crate::builtins::serde_big_int\")]");
+                new_lines.push("#[serde(with = \"crate::custom_serde::big_int\")]");
         }
 
         if is_field_def(line)
-            && line.contains("Vec<substreams::scalar::BigInt>"){
-                new_lines.push("#[serde(with = \"crate::builtins::serde_big_int::vec\")]");
+            && line.contains("Vec<substreams::scalar::BigInt>,"){
+                new_lines.push("#[serde(with = \"crate::custom_serde::big_int::vec\")]");
         }
+
+        if is_field_def(line)
+            && line.contains("Vec<u8>,"){
+                new_lines.push("#[serde(with = \"crate::custom_serde::bytes\")]");
+        }
+
+        if is_field_def(line)
+            && line.contains("Vec<Vec<u8>>,"){
+                new_lines.push("#[serde(with = \"crate::custom_serde::bytes::vec\")]");
+        }
+
         new_lines.push(line);
     }
 

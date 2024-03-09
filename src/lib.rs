@@ -13,6 +13,7 @@ use std::rc::Rc;
 
 pub mod builtins;
 pub mod abis;
+pub mod custom_serde;
 use builtins::*;
 
 use rhai::{serde::from_dynamic, Dynamic, export_module, exported_module, Engine, Scope};

@@ -118,52 +118,6 @@ impl TypeRegister for BigInt {
         }
 }
 
-pub mod serde_big_int {
-    use std::str::FromStr;
-
-    use serde::Deserializer;
-
-    use super::*;
-
-    pub fn serialize<S: Serializer>(big_int: &BigInt, serializer: S) -> Result<S::Ok, S::Error> {
-        let as_str = big_int.to_string();
-
-        serializer.collect_str(&as_str)
-    }
-
-
-    pub fn deserialize<'de, D: Deserializer<'de>>(de: D) -> Result<BigInt, D::Error> {
-        let as_string = String::deserialize(de)?;
-        BigInt::from_str(&as_string).map_err(serde::de::Error::custom)
-    }
-
-    pub mod vec {
-        use super::*;
-
-        pub fn serialize<S: Serializer>(vec: &Vec<BigInt>, serializer: S) -> Result<S::Ok, S::Error> {
-            let vec = vec.into_iter().map(|n| n.to_string()).collect::<Vec<_>>();
-
-            serializer.collect_seq(vec)
-        }
-
-
-        pub fn deserialize<'de, D: Deserializer<'de>>(de: D) -> Result<Vec<BigInt>, D::Error> {
-            let seq = <Vec<String>>::deserialize(de)?;
-            let mut output = vec![];
-
-            for item in seq.iter() {
-                match BigInt::from_str(item) {
-                    Ok(val) => output.push(val),
-                    Err(err) => return Err(serde::de::Error::custom(err.to_string())),
-                };
-            }
-
-            Ok(output)
-        }
-    }
-}
-
-
 pub fn register_builtins(engine: &mut Engine) {
     <Vec<u8>>::register_types(engine);
     BigInt::register_types(engine);
