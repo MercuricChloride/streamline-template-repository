@@ -1,6 +1,11 @@
+use std::fmt::Display;
+
 use prost_wkt_types::Value;
 use rhai::Map;
 use rhai::Shared;
+use serde::Deserialize;
+use serde::Serialize;
+use serde::Serializer;
 use substreams::pb::substreams::module::Input;
 use substreams::pb::substreams::module_progress::Type;
 use substreams_ethereum::Event;
@@ -9,17 +14,24 @@ use rhai::{Engine, Dynamic};
 use substreams::prelude::*;
 use substreams::Hex;
 
-pub fn get_events<T>(block: &mut EthBlock) -> Vec<T> 
+use ethabi::Event as EthEvent;
+
+pub fn get_events<T>(block: &mut EthBlock) -> Vec<Dynamic>
 where T: Sized + Event + Clone {
     //let addresses = addresses.iter().map(|address| Hex(address)).collect::<Vec<_>>();
     let mut events = vec![];
 
     for log in block.logs() {
         let event = T::match_and_decode(log);
+
         if let Some(event) = event {
-            events.push(event);
+            //let as_dyn = Dynamic::from(event.clone());
+            //if !as_dyn.is_unit() {
+                //events.push(as_dyn);
+            //}
         }
     }
+
     events
 }
 
@@ -102,6 +114,68 @@ impl TypeRegister for BigInt {
                 });
         }
 }
+
+struct MyBigInt {
+    pub big_int: BigInt,
+}
+
+impl From<MyBigInt> for BigInt {
+    fn from(value: MyBigInt) -> Self {
+        value.big_int
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct SerdeTest {
+    #[serde(with = "crate::builtins::serde_big_int")]
+    pub big_int: BigInt,
+}
+
+pub mod serde_big_int {
+    use std::str::FromStr;
+
+    use serde::Deserializer;
+
+    use super::*;
+
+    pub fn serialize<S: Serializer>(big_int: &BigInt, serializer: S) -> Result<S::Ok, S::Error> {
+        let as_str = big_int.to_string();
+
+        serializer.collect_str(&as_str)
+    }
+
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(de: D) -> Result<BigInt, D::Error> {
+        let as_string = String::deserialize(de)?;
+        BigInt::from_str(&as_string).map_err(serde::de::Error::custom)
+    }
+
+    pub mod vec {
+        use super::*;
+
+        pub fn serialize<S: Serializer>(vec: &Vec<BigInt>, serializer: S) -> Result<S::Ok, S::Error> {
+            let vec = vec.into_iter().map(|n| n.to_string()).collect::<Vec<_>>();
+
+            serializer.collect_seq(vec)
+        }
+
+
+        pub fn deserialize<'de, D: Deserializer<'de>>(de: D) -> Result<Vec<BigInt>, D::Error> {
+            let seq = <Vec<String>>::deserialize(de)?;
+            let mut output = vec![];
+
+            for item in seq.iter() {
+                match BigInt::from_str(item) {
+                    Ok(val) => output.push(val),
+                    Err(err) => return Err(serde::de::Error::custom(err.to_string())),
+                };
+            }
+
+            Ok(output)
+        }
+    }
+}
+
 
 pub fn register_builtins(engine: &mut Engine) {
     <Vec<u8>>::register_types(engine);

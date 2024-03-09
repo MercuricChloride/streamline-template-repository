@@ -17,8 +17,12 @@ impl AbiEventHelpers for Value {
         format!(r#"
         pub fn {event_name}(block: &mut EthBlock, addresses: Array) -> Dynamic {{
             let events = get_events::<{abi_module_name}::events::{event_name}>(block);
-            let events = events.into_iter().map(Dynamic::from).collect::<Vec<_>>();
-            Dynamic::from(events)
+            if events.is_empty() {{
+                Dynamic::UNIT
+            }} else {{
+                let events = events.into_iter().map(Dynamic::from).collect::<Vec<_>>();
+                Dynamic::from(events)
+            }}
         }}
         "#)
     }
@@ -71,11 +75,11 @@ mod {contract_name} {{
 }
 // Derives
 const DEFAULT_DERIVES: &'static str = "#[derive(Debug, Clone, PartialEq)]";
-const REPLACEMENT_DERIVES: &'static str = "#[derive(Debug, Clone, PartialEq, CustomType)]";
+const REPLACEMENT_DERIVES: &'static str = "#[derive(Debug, Clone, PartialEq, CustomType, Serialize, Deserialize)]";
 
 // Imports
 const DEFAULT_IMPORTS: &'static str = "use super::INTERNAL_ERR;";
-const REPLACEMENT_IMPORTS: &'static str = "use super::INTERNAL_ERR; use rhai::{{TypeBuilder, CustomType}};";
+const REPLACEMENT_IMPORTS: &'static str = "use super::INTERNAL_ERR; use rhai::{{TypeBuilder, CustomType}}; use serde::{Serialize, Deserialize};";
 
 fn replace_derives(path: &str) {
     let mut file = fs::read_to_string(path).unwrap();
@@ -87,6 +91,40 @@ fn replace_imports(path: &str) {
     let mut file = fs::read_to_string(path).unwrap();
     let contents = file.replace(DEFAULT_IMPORTS, REPLACEMENT_IMPORTS);
     fs::write(path, contents).unwrap();
+}
+
+
+// NOTE This is pretty dumb, I should use regex eventually here but it's fine for me now
+fn is_field_def(line: &str) -> bool {
+    let line = line.trim();
+
+    // make sures it's a public field
+    line.starts_with("pub")
+        // make sure it isn't a function
+        && !line.starts_with("pub fn")
+        && !line.contains("->")
+}
+
+fn add_bigint_serde(path: &str) {
+    let file = fs::read_to_string(path).unwrap();
+    let mut new_lines = vec![];
+    let lines = file.lines().collect::<Vec<_>>();
+
+    for line in lines {
+        // we want to replace field declarations of BigInts, with the appropriate derives
+        if is_field_def(line)
+            && line.contains("substreams::scalar::BigInt,") {
+                new_lines.push("#[serde(with = \"crate::builtins::serde_big_int\")]");
+        }
+
+        if is_field_def(line)
+            && line.contains("Vec<substreams::scalar::BigInt>"){
+                new_lines.push("#[serde(with = \"crate::builtins::serde_big_int::vec\")]");
+        }
+        new_lines.push(line);
+    }
+
+    fs::write(path, new_lines.join("\n")).unwrap();
 }
 
 pub fn main() -> Result<(), anyhow::Error> {
@@ -115,6 +153,7 @@ pub fn main() -> Result<(), anyhow::Error> {
         // Replace the default derives with the custom ones
         replace_derives(&target_path);
         replace_imports(&target_path);
+        add_bigint_serde(&target_path);
 
         // Add the abi module to the mod file
         mod_file.push_str(&format!(r#"pub mod {abi_name};"#));
@@ -130,10 +169,8 @@ pub fn main() -> Result<(), anyhow::Error> {
         imports.push_str(&format!(r#"include!("./{abi_name}.rs");"#));
 
         module_formatters.push_str(&format!(r#"
-    let module = exported_module!({abi_name});
-    // A module can simply be registered into the global namespace.
-    engine.register_static_module("{abi_name}", module.into());
-            "#));
+let module = exported_module!({abi_name});
+engine.register_static_module("{abi_name}", module.into());"#));
 
         // build the types with the engine
         module_formatters.push_str(&decoded.build_type(&abi_name));
