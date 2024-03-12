@@ -12,7 +12,6 @@ pub mod big_int {
         serializer.collect_str(&as_str)
     }
 
-
     pub fn deserialize<'de, D: Deserializer<'de>>(de: D) -> Result<BigInt, D::Error> {
         let as_string = String::deserialize(de)?;
         BigInt::from_str(&as_string).map_err(serde::de::Error::custom)
@@ -21,12 +20,14 @@ pub mod big_int {
     pub mod vec {
         use super::*;
 
-        pub fn serialize<S: Serializer>(vec: &Vec<BigInt>, serializer: S) -> Result<S::Ok, S::Error> {
+        pub fn serialize<S: Serializer>(
+            vec: &Vec<BigInt>,
+            serializer: S,
+        ) -> Result<S::Ok, S::Error> {
             let vec = vec.into_iter().map(|n| n.to_string()).collect::<Vec<_>>();
 
             serializer.collect_seq(vec)
         }
-
 
         pub fn deserialize<'de, D: Deserializer<'de>>(de: D) -> Result<Vec<BigInt>, D::Error> {
             let seq = <Vec<String>>::deserialize(de)?;
@@ -55,7 +56,6 @@ pub mod bytes {
         serializer.collect_str(&as_str)
     }
 
-
     pub fn deserialize<'de, D: Deserializer<'de>>(de: D) -> Result<Vec<u8>, D::Error> {
         let as_string = String::deserialize(de)?;
         Hex::decode(&as_string).map_err(serde::de::Error::custom)
@@ -64,12 +64,17 @@ pub mod bytes {
     pub mod vec {
         use super::*;
 
-        pub fn serialize<S: Serializer>(vec: &Vec<Vec<u8>>, serializer: S) -> Result<S::Ok, S::Error> {
-            let vec = vec.into_iter().map(|val| Hex(val).to_string()).collect::<Vec<_>>();
+        pub fn serialize<S: Serializer>(
+            vec: &Vec<Vec<u8>>,
+            serializer: S,
+        ) -> Result<S::Ok, S::Error> {
+            let vec = vec
+                .into_iter()
+                .map(|val| Hex(val).to_string())
+                .collect::<Vec<_>>();
 
             serializer.collect_seq(vec)
         }
-
 
         pub fn deserialize<'de, D: Deserializer<'de>>(de: D) -> Result<Vec<Vec<u8>>, D::Error> {
             let seq = <Vec<String>>::deserialize(de)?;
