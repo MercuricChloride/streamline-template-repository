@@ -1,7 +1,7 @@
-use std::{fmt::format, fs};
+use std::{env, fmt::format, fs};
 
-use serde_json::{self, Value};
 use serde::{de, Deserialize, Serialize};
+use serde_json::{self, Value};
 use substreams_ethereum::Abigen;
 
 use convert_case::{Case, Casing};
@@ -14,7 +14,8 @@ trait AbiEventHelpers {
 impl AbiEventHelpers for Value {
     fn event_getter(&self, abi_module_name: &str) -> String {
         let event_name = self["name"].as_str().unwrap().to_case(Case::UpperCamel);
-        format!(r#"
+        format!(
+            r#"
         pub fn {event_name}(block: &mut EthBlock, addresses: Array) -> Dynamic {{
             let events = get_events::<{abi_module_name}::events::{event_name}>(block);
             if events.is_empty() {{
@@ -24,9 +25,10 @@ impl AbiEventHelpers for Value {
                 Dynamic::from(events)
             }}
         }}
-        "#)
+        "#
+        )
     }
-    
+
     fn type_builder(&self, abi_module_name: &str) -> String {
         if self["type"] != "event" {
             return String::new();
@@ -45,12 +47,14 @@ impl AbiHelpers for Vec<Value> {
     fn engine_init(&self, abi_path: &str, contract_name: &str, events: &Vec<&Value>) -> String {
         let abi_module_name = format!("{}_abi", contract_name);
 
-        let event_registers = events.iter()
+        let event_registers = events
+            .iter()
             .map(|event| event.event_getter(&abi_module_name))
             .collect::<Vec<_>>()
             .join("\n");
 
-        format!(r#"
+        format!(
+            r#"
 #[export_module]
 mod {contract_name} {{
     use super::EthBlock;
@@ -58,14 +62,16 @@ mod {contract_name} {{
     use rhai::plugin::*;
     use substreams_ethereum::Event;
     use crate::abis::{contract_name} as {abi_module_name};
-    use crate::builtins::get_events;
+    use rhai::packages::streamline::builtins::get_events;
     {event_registers}
 }}
-        "#)
+        "#
+        )
     }
 
     fn build_type(&self, abi_module_name: &str) -> String {
-        let type_builders = self.iter()
+        let type_builders = self
+            .iter()
             .map(|event| event.type_builder(abi_module_name))
             .collect::<Vec<_>>()
             .join("\n");
@@ -75,7 +81,8 @@ mod {contract_name} {{
 }
 // Derives
 const DEFAULT_DERIVES: &'static str = "#[derive(Debug, Clone, PartialEq)]";
-const REPLACEMENT_DERIVES: &'static str = "#[derive(Debug, Clone, PartialEq, CustomType, Serialize, Deserialize)]";
+const REPLACEMENT_DERIVES: &'static str =
+    "#[derive(Debug, Clone, PartialEq, CustomType, Serialize, Deserialize)]";
 
 // Imports
 const DEFAULT_IMPORTS: &'static str = "use super::INTERNAL_ERR;";
@@ -92,7 +99,6 @@ fn replace_imports(path: &str) {
     let contents = file.replace(DEFAULT_IMPORTS, REPLACEMENT_IMPORTS);
     fs::write(path, contents).unwrap();
 }
-
 
 // NOTE This is pretty dumb, I should use regex eventually here but it's fine for me now
 fn is_field_def(line: &str) -> bool {
@@ -112,24 +118,24 @@ fn add_bigint_serde(path: &str) {
 
     for line in lines {
         // we want to replace field declarations of BigInts, with the appropriate derives
-        if is_field_def(line)
-            && line.contains("substreams::scalar::BigInt,") {
-                new_lines.push("#[serde(with = \"crate::custom_serde::big_int\")]");
+        // if line.trim() == "substreams::scalar::BigInt," {
+        //     new_lines.push("#[serde_as(as = \"DisplayFromStr\")]");
+        // }
+
+        if is_field_def(line) && line.contains("substreams::scalar::BigInt,") {
+            new_lines.push("#[serde(with = \"crate::custom_serde::big_int\")]");
         }
 
-        if is_field_def(line)
-            && line.contains("Vec<substreams::scalar::BigInt>,"){
-                new_lines.push("#[serde(with = \"crate::custom_serde::big_int::vec\")]");
+        if is_field_def(line) && line.contains("Vec<substreams::scalar::BigInt>,") {
+            new_lines.push("#[serde(with = \"crate::custom_serde::big_int::vec\")]");
         }
 
-        if is_field_def(line)
-            && line.contains("Vec<u8>,"){
-                new_lines.push("#[serde(with = \"crate::custom_serde::bytes\")]");
+        if is_field_def(line) && line.contains("Vec<u8>,") {
+            new_lines.push("#[serde(with = \"crate::custom_serde::bytes\")]");
         }
 
-        if is_field_def(line)
-            && line.contains("Vec<Vec<u8>>,"){
-                new_lines.push("#[serde(with = \"crate::custom_serde::bytes::vec\")]");
+        if is_field_def(line) && line.contains("Vec<Vec<u8>>,") {
+            new_lines.push("#[serde(with = \"crate::custom_serde::bytes::vec\")]");
         }
 
         new_lines.push(line);
@@ -139,7 +145,9 @@ fn add_bigint_serde(path: &str) {
 }
 
 pub fn main() -> Result<(), anyhow::Error> {
-    let abis = fs::read_dir("abis").unwrap();
+    let home = env::var("HOME").expect("Couldn't get $HOME variable on path!");
+    let abis_path = format!("{home}/streamline-cli/abis");
+    let abis = fs::read_dir(abis_path).unwrap();
 
     let mut module_formatters = String::new();
     let mut imports = String::new();
@@ -152,11 +160,16 @@ pub fn main() -> Result<(), anyhow::Error> {
 
         let abi_contents = fs::read_to_string(&abi_path_str)?;
 
-        let abi_name = abi_file_name.split('/').last().unwrap().trim_end_matches(".json");
-        let decoded: Vec<Value>  = serde_json::from_str(&abi_contents)?;
+        let abi_name = abi_file_name
+            .split('/')
+            .last()
+            .unwrap()
+            .trim_end_matches(".json");
+
+        let decoded: Vec<Value> = serde_json::from_str(&abi_contents)?;
 
         // Write the rust bindings
-        let target_path = format!("./src/abis/{}.rs",abi_name);
+        let target_path = format!("./src/abis/{}.rs", abi_name);
         Abigen::new(abi_name, abi_path_str)?
             .generate()?
             .write_to_file(&target_path)?;
@@ -169,25 +182,32 @@ pub fn main() -> Result<(), anyhow::Error> {
         // Add the abi module to the mod file
         mod_file.push_str(&format!(r#"pub mod {abi_name};"#));
 
-        let events = decoded.iter().filter(|event| event["type"] == "event").collect::<Vec<_>>();
+        let events = decoded
+            .iter()
+            .filter(|event| event["type"] == "event")
+            .collect::<Vec<_>>();
 
         let generated_code = decoded.engine_init(&abi_path_str, abi_name, &events);
 
+        fs::create_dir_all("./src/generated/")?;
         // Write the generated rhai module to a file
         fs::write(format!("./src/generated/{}.rs", abi_name), generated_code).unwrap();
 
         // import the include statement to the imports string
         imports.push_str(&format!(r#"include!("./{abi_name}.rs");"#));
 
-        module_formatters.push_str(&format!(r#"
+        module_formatters.push_str(&format!(
+            r#"
 let module = exported_module!({abi_name});
-engine.register_static_module("{abi_name}", module.into());"#));
+engine.register_static_module("{abi_name}", module.into());"#
+        ));
 
         // build the types with the engine
         module_formatters.push_str(&decoded.build_type(&abi_name));
     }
 
-    let engine_init_macro = format!(r#"
+    let engine_init_macro = format!(
+        r#"
 macro_rules! engine_init {{
     () => {{{{
         let mut engine = Engine::new_raw();
@@ -197,11 +217,12 @@ macro_rules! engine_init {{
         (engine, scope)
     }}}};
 }}
-    "#);
+    "#
+    );
 
-     fs::write("./src/generated/imports.rs", imports).unwrap();
-     fs::write("./src/generated/engine_init.rs", engine_init_macro).unwrap();
-     fs::write("./src/abis/mod.rs", mod_file).unwrap();
+    fs::write("./src/generated/imports.rs", imports).unwrap();
+    fs::write("./src/generated/engine_init.rs", engine_init_macro).unwrap();
+    fs::write("./src/abis/mod.rs", mod_file).unwrap();
 
     Ok(())
 }
