@@ -16,13 +16,13 @@ impl AbiEventHelpers for Value {
         let event_name = self["name"].as_str().unwrap().to_case(Case::UpperCamel);
         format!(
             r#"
-        pub fn {event_name}(block: &mut EthBlock, addresses: Array) -> Dynamic {{
-            let events = get_events::<{abi_module_name}::events::{event_name}>(block);
+        pub fn {event_name}(block: &mut EthBlock, addresses: Array) -> Array {{
+            let events = get_events::<{abi_module_name}::events::{event_name}>(block, addresses);
             if events.is_empty() {{
-                Dynamic::UNIT
+                vec![].into()
             }} else {{
                 let events = events.into_iter().map(Dynamic::from).collect::<Vec<_>>();
-                Dynamic::from(events)
+                events.into()
             }}
         }}
         "#
@@ -39,12 +39,24 @@ impl AbiEventHelpers for Value {
 }
 
 trait AbiHelpers {
-    fn engine_init(&self, abi_path: &str, contract_name: &str, events: &Vec<&Value>) -> String;
+    fn engine_init(
+        &self,
+        abi_path: &str,
+        contract_name: &str,
+        events: &Vec<&Value>,
+        functions: &str,
+    ) -> String;
     fn build_type(&self, abi_module_name: &str) -> String;
 }
 
 impl AbiHelpers for Vec<Value> {
-    fn engine_init(&self, abi_path: &str, contract_name: &str, events: &Vec<&Value>) -> String {
+    fn engine_init(
+        &self,
+        abi_path: &str,
+        contract_name: &str,
+        events: &Vec<&Value>,
+        functions: &str,
+    ) -> String {
         let abi_module_name = format!("{}_abi", contract_name);
 
         let event_registers = events
@@ -62,8 +74,10 @@ mod {contract_name} {{
     use rhai::plugin::*;
     use substreams_ethereum::Event;
     use crate::abis::{contract_name} as {abi_module_name};
-    use rhai::packages::streamline::builtins::get_events;
+    use crate::custom_serde;
+    use rhai::packages::streamline::builtins::*;
     {event_registers}
+    {functions}
 }}
         "#
         )
@@ -79,14 +93,153 @@ mod {contract_name} {{
         type_builders
     }
 }
+
+struct AbiViewFunction(Value);
+
+struct FunctionInput {
+    pub name: String,
+    pub kind: String,
+}
+
+impl AbiViewFunction {
+    pub fn new(value: &Value) -> Option<Self> {
+        if let (Some(Value::String(mutability)), Some(Value::String(kind))) =
+            (value.get("stateMutability"), value.get("type"))
+        {
+            if kind.as_str() != "function" {
+                return None;
+            }
+
+            match mutability.as_str() {
+                "view" | "pure" => return Some(Self(value.clone())),
+                _ => return None,
+            };
+        };
+        None
+    }
+
+    pub fn generate(&self, abi_name: &str) -> String {
+        let abi_module_name = format!("{}_abi", abi_name);
+        let function_name = self.0.get("name");
+
+        let function_name = if let Some(Value::String(string)) = function_name {
+            string
+        } else {
+            panic!("Function name not a string! {:?}", function_name)
+        };
+
+        let function_input_struct = function_name.to_case(Case::UpperCamel);
+
+        let inputs = if let Some(Value::Array(arr)) = self.0.get("inputs") {
+            arr.iter()
+                .map(|e| {
+                    let name = e.get("name");
+                    let kind = e.get("type");
+
+                    if let (Some(Value::String(name)), Some(Value::String(kind))) = (name, kind) {
+                        FunctionInput {
+                            name: name.into(),
+                            kind: kind.into(),
+                        }
+                    } else {
+                        panic!(
+                            "Name or type not found to be a string! name: {:?}\n kind:{:?}",
+                            name, kind
+                        );
+                    }
+                })
+                .collect()
+        } else {
+            vec![]
+        };
+
+        let outputs = if let Some(Value::Array(arr)) = self.0.get("outputs") {
+            arr.iter()
+                .map(|e| {
+                    let kind = e.get("type");
+                    let components = e.get("components");
+
+                    if let Some(Value::String(kind)) = kind {
+                        get_rust_type(kind, components)
+                    } else {
+                        panic!("ABI Output type not found to be a string! type:{:?}", kind);
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(",")
+        } else {
+            String::new()
+        };
+
+        if inputs.len() > 0 {
+            // TODO This is for simplicity sake
+            // I will support any function later, but for now the types are causing
+            // a lot of problems, and I don't have time to solve it perfectly right now
+            return "".into();
+        }
+
+        format!(
+            r#"
+        pub fn {function_name}(target_address: ImmutableString) -> Dynamic {{
+            type T = {abi_module_name}::functions::{function_input_struct};
+
+            let call_result = rpc_call::<T, _>(T {{}}, target_address);
+            if let Some(call_result) = call_result {{
+                Dynamic::from(call_result)
+            }} else {{
+                Dynamic::UNIT
+            }}
+        }}
+        "#
+        )
+    }
+}
+
+/// Converts a solidity type, into it's appropriate rust type
+fn get_rust_type(kind: &str, tuple_components: Option<&Value>) -> String {
+    match kind {
+        "address" => "Vec<u8>".into(),
+        //"uint8" | "uint16" | "uint24" | "uint32" => "u32".into(),
+        //"int8" | "int16" | "int24" | "int32" => "i32".into(),
+        "string" => "String".into(),
+        "bool" => "bool".into(),
+        s if s.contains("[]") => {
+            let kind = s.split("[]").collect::<Vec<_>>()[0];
+            format!("Vec<{}>", get_rust_type(kind, tuple_components))
+        }
+        s if s.contains("tuple") => {
+            if let Some(Value::Array(parts)) = tuple_components {
+                let parts = parts
+                    .iter()
+                    .filter_map(|e| {
+                        if let Some(Value::String(e)) = e.get("type") {
+                            Some(get_rust_type(e, tuple_components))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",");
+                format!("({parts})")
+            } else {
+                panic!()
+            }
+        }
+        s if s.contains("bytes") => "Vec<u8>".into(),
+        s if s.contains("uint") => "BigInt".into(),
+        s if s.contains("int") => "BigInt".into(),
+        _ => panic!("Unknown type! {:?}", kind),
+    }
+}
+
 // Derives
 const DEFAULT_DERIVES: &'static str = "#[derive(Debug, Clone, PartialEq)]";
 const REPLACEMENT_DERIVES: &'static str =
-    "#[derive(Debug, Clone, PartialEq, CustomType, Serialize, Deserialize)]";
+    "#[derive(Debug, Clone, PartialEq, CustomType, Serialize, Deserialize, From)]";
 
 // Imports
 const DEFAULT_IMPORTS: &'static str = "use super::INTERNAL_ERR;";
-const REPLACEMENT_IMPORTS: &'static str = "use super::INTERNAL_ERR; use rhai::{{TypeBuilder, CustomType}}; use serde::{Serialize, Deserialize};";
+const REPLACEMENT_IMPORTS: &'static str = "use super::INTERNAL_ERR; use rhai::{{TypeBuilder, CustomType}}; use serde::{Serialize, Deserialize}; use derive_more::From;";
 
 fn replace_derives(path: &str) {
     let mut file = fs::read_to_string(path).unwrap();
@@ -182,12 +335,19 @@ pub fn main() -> Result<(), anyhow::Error> {
         // Add the abi module to the mod file
         mod_file.push_str(&format!(r#"pub mod {abi_name};"#));
 
+        let view_functions = decoded
+            .iter()
+            .filter_map(AbiViewFunction::new)
+            .map(|e| e.generate(abi_name))
+            .collect::<Vec<_>>()
+            .join("");
+
         let events = decoded
             .iter()
             .filter(|event| event["type"] == "event")
             .collect::<Vec<_>>();
 
-        let generated_code = decoded.engine_init(&abi_path_str, abi_name, &events);
+        let generated_code = decoded.engine_init(&abi_path_str, abi_name, &events, &view_functions);
 
         fs::create_dir_all("./src/generated/")?;
         // Write the generated rhai module to a file
