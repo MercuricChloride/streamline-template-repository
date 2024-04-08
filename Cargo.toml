@@ -20,6 +20,7 @@ substreams = "0.5.12"
 substreams-database-change = "1.3.0"
 substreams-entity-change = { git = "https://github.com/MercuricChloride/substreams-sink-entity-changes.git", branch = "develop" }
 substreams-ethereum = "0.9.9"
+derive_more = "0.99.17"
 
 [profile.release]
 lto = "fat"
