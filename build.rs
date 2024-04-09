@@ -171,6 +171,29 @@ impl AbiViewFunction {
             String::new()
         };
 
+        let has_address_input = inputs.len() == 1 && &inputs[0].kind == "address";
+
+        // NOTE This is hardcoded
+        if has_address_input {
+            return format!(
+                r#"
+        pub fn {function_name}(input_address: ImmutableString, target_address: ImmutableString) -> Dynamic {{
+            type T = {abi_module_name}::functions::{function_input_struct};
+
+            let input_address: Vec<u8> = Hex::decode(input_address.to_string()).unwrap();
+            let input_address: T = T::from(input_address);
+
+            let call_result = rpc_call::<T, _>(input_address, target_address);
+            if let Some(call_result) = call_result {{
+                Dynamic::from(call_result)
+            }} else {{
+                Dynamic::UNIT
+            }}
+        }}
+        "#
+            );
+        }
+
         if inputs.len() > 0 {
             // TODO This is for simplicity sake
             // I will support any function later, but for now the types are causing
