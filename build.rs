@@ -153,7 +153,9 @@ impl AbiViewFunction {
             vec![]
         };
 
+        let output_count;
         let outputs = if let Some(Value::Array(arr)) = self.0.get("outputs") {
+            output_count = arr.len();
             arr.iter()
                 .map(|e| {
                     let kind = e.get("type");
@@ -168,10 +170,25 @@ impl AbiViewFunction {
                 .collect::<Vec<_>>()
                 .join(",")
         } else {
+            output_count = 0 as usize;
             String::new()
         };
 
         let has_address_input = inputs.len() == 1 && &inputs[0].kind == "address";
+
+        let mut tuple_to_array = String::new();
+        if output_count == 1 {
+            tuple_to_array = "Dynamic::from(call_result)".into();
+        } else {
+            for i in 0..output_count {
+                let accessor = format!(
+                    "
+                output_array.push(Dynamic::from(call_result.{i}));"
+                );
+                tuple_to_array.push_str(&accessor);
+            }
+            tuple_to_array.push_str("\n\n                Dynamic::from(output_array)");
+        }
 
         // NOTE This is hardcoded
         if has_address_input {
@@ -185,7 +202,8 @@ impl AbiViewFunction {
 
             let call_result = rpc_call::<T, _>(input_address, target_address);
             if let Some(call_result) = call_result {{
-                Dynamic::from(call_result)
+                let mut output_array: Vec<Dynamic> = vec![];
+                {tuple_to_array}
             }} else {{
                 Dynamic::UNIT
             }}
@@ -208,7 +226,8 @@ impl AbiViewFunction {
 
             let call_result = rpc_call::<T, _>(T {{}}, target_address);
             if let Some(call_result) = call_result {{
-                Dynamic::from(call_result)
+                let mut output_array: Vec<Dynamic> = vec![];
+                {tuple_to_array}
             }} else {{
                 Dynamic::UNIT
             }}
