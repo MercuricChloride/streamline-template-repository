@@ -162,7 +162,7 @@ impl AbiViewFunction {
                     let components = e.get("components");
 
                     if let Some(Value::String(kind)) = kind {
-                        if kind.contains("tuple") && arr.len() == 1 {
+                        if kind.contains("tuple") && !kind.contains("[]") && arr.len() == 1 {
                             let components = components.and_then(|e| e.as_array()).unwrap();
                             output_count = components.len();
                         }
