@@ -153,7 +153,7 @@ impl AbiViewFunction {
             vec![]
         };
 
-        let output_count;
+        let mut output_count;
         let outputs = if let Some(Value::Array(arr)) = self.0.get("outputs") {
             output_count = arr.len();
             arr.iter()
@@ -162,6 +162,10 @@ impl AbiViewFunction {
                     let components = e.get("components");
 
                     if let Some(Value::String(kind)) = kind {
+                        if kind.contains("tuple") && arr.len() == 1 {
+                            let components = components.and_then(|e| e.as_array()).unwrap();
+                            output_count = components.len();
+                        }
                         get_rust_type(kind, components)
                     } else {
                         panic!("ABI Output type not found to be a string! type:{:?}", kind);
@@ -177,6 +181,7 @@ impl AbiViewFunction {
         let has_address_input = inputs.len() == 1 && &inputs[0].kind == "address";
 
         let mut tuple_to_array = String::new();
+
         if output_count == 1 {
             tuple_to_array = "Dynamic::from(call_result)".into();
         } else {
